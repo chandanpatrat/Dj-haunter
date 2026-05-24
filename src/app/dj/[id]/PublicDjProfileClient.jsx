@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Speaker, Phone, MessageCircle, MonitorPlay, Camera, CheckCircle2, Flame, ShieldCheck, Heart, Share2, Check } from 'lucide-react';
+import { ArrowLeft, MapPin, Speaker, Phone, MessageCircle, MonitorPlay, Camera, CheckCircle2, Flame, ShieldCheck, Heart, Share2, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/utils/supabase';
 
 export default function PublicDjProfileClient({ initialDjData, profileRetrievalErrorMessage: serverError, targetDjProfileId }) {
@@ -13,6 +13,16 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
   const [isFavorited, setIsFavorited] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+  const desktopScrollContainerRef = useRef(null);
+  const mobileScrollContainerRef = useRef(null);
+
+  const scrollVideos = (direction, isMobile = false) => {
+    const container = isMobile ? mobileScrollContainerRef.current : desktopScrollContainerRef.current;
+    if (container) {
+      const scrollAmount = direction === 'left' ? -400 : 400;
+      container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined' && targetDjProfileId) {
@@ -317,23 +327,71 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               </div>
             </div>
 
-            {/* Playable Performance Video Grid Section */}
+
+            {/* Hardware Specifications Card */}
+            <div className="bg-slate-900/50 backdrop-blur-2xl border border-indigo-500/30 border-t-indigo-400/40 rounded-3xl p-8 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.6)] relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent pointer-events-none"></div>
+              <h2 className="text-xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
+                <div className="p-2.5 bg-indigo-500/15 rounded-xl border border-indigo-500/30 shadow-inner">
+                  <Speaker className="h-5 w-5 text-indigo-400" />
+                </div>
+                Hardware & Sound Specifications
+              </h2>
+              <div className="relative z-10 bg-slate-950/60 border border-slate-800/80 rounded-2xl p-6 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
+                <p className="text-slate-300 whitespace-pre-wrap leading-relaxed font-medium">
+                  {activeDjProfileData.specs || "No specific hardware details provided."}
+                </p>
+              </div>
+            </div>
+
+            {/* Desktop Live Performance Carousel Section (Desktop only) */}
             {parsedVideos.length > 0 && (
-              <div className="bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/20 border-t-cyan-500/30 rounded-[2rem] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden mt-8">
+              <div className="hidden lg:block bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/20 border-t-cyan-500/30 rounded-[2rem] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden mt-6">
                 <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
                 <div className="absolute top-0 right-0 w-60 h-60 bg-cyan-500/5 rounded-full blur-[80px] pointer-events-none"></div>
                 
-                <h2 className="text-2xl font-black text-white mb-2 flex items-center gap-3 relative z-10">
-                  <div className="p-2.5 bg-cyan-500/15 rounded-xl border border-cyan-500/30 shadow-inner">
-                    <MonitorPlay className="h-6 w-6 text-cyan-400" />
-                  </div>
-                  Live Showreels & Performances
-                </h2>
+                <div className="flex items-center justify-between mb-2 relative z-10">
+                  <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                    <div className="p-2.5 bg-cyan-500/15 rounded-xl border border-cyan-500/30 shadow-inner">
+                      <MonitorPlay className="h-6 w-6 text-cyan-400" />
+                    </div>
+                    Live Performance
+                  </h2>
+                  
+                  {/* Premium Navigation Arrows for Horizontal Scroll */}
+                  {parsedVideos.length > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => scrollVideos('left')}
+                        className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
+                        aria-label="Scroll left"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => scrollVideos('right')}
+                        className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
+                        aria-label="Scroll right"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <p className="text-slate-400 text-sm mb-8 ml-1 relative z-10">Watch live setups, lighting displays, and earth-shattering bass checks in action.</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                {/* Horizontal Scrollable Container */}
+                <div 
+                  ref={desktopScrollContainerRef}
+                  className="flex gap-6 overflow-x-auto hide-scrollbar pb-6 snap-x snap-mandatory scroll-smooth relative z-10 -mx-4 px-4 sm:mx-0 sm:px-0"
+                >
                   {parsedVideos.map((video, idx) => (
-                    <div key={idx} className="bg-slate-950/60 border border-slate-800 p-6 rounded-3xl flex flex-col items-center justify-between shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-300">
+                    <div 
+                      key={idx} 
+                      className={`flex-shrink-0 snap-start bg-slate-950/60 border border-slate-800 p-6 rounded-3xl flex flex-col items-center justify-between shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-300 ${
+                        video.orientation === 'vertical' ? 'w-[280px] sm:w-[320px]' : 'w-full max-w-[320px] sm:max-w-none sm:w-[500px]'
+                      }`}
+                    >
                       <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent pointer-events-none"></div>
                       
                       <div className="w-full flex items-center justify-between mb-4 border-b border-slate-800/80 pb-3">
@@ -378,22 +436,6 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
                 </div>
               </div>
             )}
-
-            {/* Hardware Specifications Card */}
-            <div className="bg-slate-900/50 backdrop-blur-2xl border border-indigo-500/30 border-t-indigo-400/40 rounded-3xl p-8 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.6)] relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent pointer-events-none"></div>
-              <h2 className="text-xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
-                <div className="p-2.5 bg-indigo-500/15 rounded-xl border border-indigo-500/30 shadow-inner">
-                  <Speaker className="h-5 w-5 text-indigo-400" />
-                </div>
-                Hardware & Sound Specifications
-              </h2>
-              <div className="relative z-10 bg-slate-950/60 border border-slate-800/80 rounded-2xl p-6 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
-                <p className="text-slate-300 whitespace-pre-wrap leading-relaxed font-medium">
-                  {activeDjProfileData.specs || "No specific hardware details provided."}
-                </p>
-              </div>
-            </div>
           </div>
 
           {/* RIGHT COLUMN: Booking & Contacts */}
@@ -526,6 +568,99 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
 
           </div>
         </div>
+
+        {/* Mobile Live Performance Carousel Section (Mobile only) */}
+        {parsedVideos.length > 0 && (
+          <div className="lg:hidden bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/20 border-t-cyan-500/30 rounded-[2rem] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden mt-10">
+            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-60 h-60 bg-cyan-500/5 rounded-full blur-[80px] pointer-events-none"></div>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2 relative z-10">
+              <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                <div className="p-2.5 bg-cyan-500/15 rounded-xl border border-cyan-500/30 shadow-inner">
+                  <MonitorPlay className="h-6 w-6 text-cyan-400" />
+                </div>
+                Live Performance
+              </h2>
+              
+              {/* Premium Navigation Arrows for Horizontal Scroll */}
+              {parsedVideos.length > 1 && (
+                <div className="hidden md:flex items-center gap-2">
+                  <button
+                    onClick={() => scrollVideos('left', true)}
+                    className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
+                    aria-label="Scroll left"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => scrollVideos('right', true)}
+                    className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
+                    aria-label="Scroll right"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-slate-400 text-sm mb-8 ml-1 relative z-10">Watch live setups, lighting displays, and earth-shattering bass checks in action.</p>
+
+            {/* Horizontal Scrollable Container */}
+            <div 
+              ref={mobileScrollContainerRef}
+              className="flex gap-6 overflow-x-auto hide-scrollbar pb-6 snap-x snap-mandatory scroll-smooth relative z-10 -mx-4 px-4 sm:mx-0 sm:px-0"
+            >
+              {parsedVideos.map((video, idx) => (
+                <div 
+                  key={idx} 
+                  className={`flex-shrink-0 snap-start bg-slate-950/60 border border-slate-800 p-6 rounded-3xl flex flex-col items-center justify-between shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-300 ${
+                    video.orientation === 'vertical' ? 'w-[280px] sm:w-[320px]' : 'w-full max-w-[320px] sm:max-w-none sm:w-[500px]'
+                  }`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent pointer-events-none"></div>
+                  
+                  <div className="w-full flex items-center justify-between mb-4 border-b border-slate-800/80 pb-3">
+                    <span className="text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-ping"></span>
+                      Clip #{idx + 1}
+                    </span>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-1 rounded-md">{video.label}</span>
+                  </div>
+
+                  <div className="w-full flex-grow flex items-center justify-center py-2">
+                    {video.orientation === 'vertical' ? (
+                      /* Vertical 9:16 player styled as a modern smartphone bezel */
+                      <div className="w-full max-w-[240px] relative rounded-[2rem] overflow-hidden border-[6px] border-slate-900 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-[9/16] bg-slate-950">
+                        {/* Smartphone camera/notch notch */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-4 bg-slate-900 rounded-b-xl z-20 flex items-center justify-center">
+                          <div className="w-5 h-0.5 bg-slate-700 rounded-full mb-0.5"></div>
+                        </div>
+                        <iframe
+                          src={video.embedUrl}
+                          title={`Performance clip #${idx + 1}`}
+                          className="w-full h-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    ) : (
+                      /* Horizontal 16:9 player styled as cinematic screen */
+                      <div className="w-full relative rounded-2xl overflow-hidden border border-slate-800 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-video bg-slate-950">
+                        <iframe
+                          src={video.embedUrl}
+                          title={`Performance clip #${idx + 1}`}
+                          className="w-full h-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
