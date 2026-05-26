@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Navigation, MapPin, ArrowRight, Search, Zap, Speaker, Flame } from 'lucide-react';
+import { Navigation, MapPin, ArrowRight, Search, Zap, Speaker, Flame, Heart, X, Trash2 } from 'lucide-react';
 import { supabase } from '@/utils/supabase';
 
 export default function HomePage() {
@@ -15,6 +15,67 @@ export default function HomePage() {
   const [liveTrendingDjs, setLiveTrendingDjs] = useState([]);
   const [liveNetworkDjs, setLiveNetworkDjs] = useState([]);
   const [isFeedLoading, setIsFeedLoading] = useState(true);
+
+  // Favorites Panel State Managers
+  const [showFavoritesDrawer, setShowFavoritesDrawer] = useState(false);
+  const [favoriteDjs, setFavoriteDjs] = useState([]);
+  const [favoritesCount, setFavoritesCount] = useState(0);
+
+  // Load favorites length and badge reactively
+  const loadFavoritesCount = () => {
+    if (typeof window !== 'undefined') {
+      const favorites = JSON.parse(localStorage.getItem('favorite_djs') || '[]');
+      setFavoritesCount(favorites.length);
+    }
+  };
+
+  // Sync favorites details from database when open
+  const fetchFavoriteDjs = async () => {
+    if (typeof window === 'undefined') return;
+    const favorites = JSON.parse(localStorage.getItem('favorite_djs') || '[]');
+    if (favorites.length === 0) {
+      setFavoriteDjs([]);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('dj_directory')
+        .select('*')
+        .in('id', favorites);
+        
+      if (error) throw error;
+      setFavoriteDjs(data || []);
+    } catch (error) {
+      console.error("Error fetching favorited DJs:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadFavoritesCount();
+    window.addEventListener('storage', loadFavoritesCount);
+    return () => window.removeEventListener('storage', loadFavoritesCount);
+  }, []);
+
+  useEffect(() => {
+    if (showFavoritesDrawer) {
+      fetchFavoriteDjs();
+    }
+  }, [showFavoritesDrawer]);
+
+  const handleRemoveFavorite = (id, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof window === 'undefined') return;
+    
+    const favorites = JSON.parse(localStorage.getItem('favorite_djs') || '[]');
+    const updated = favorites.filter(favId => favId !== id);
+    localStorage.setItem('favorite_djs', JSON.stringify(updated));
+    setFavoritesCount(updated.length);
+    setFavoriteDjs(prev => prev.filter(dj => dj.id !== id));
+    
+    // Dispatch event to keep pages in sync
+    window.dispatchEvent(new Event('storage'));
+  };
 
   useEffect(() => {
     async function fetchHomepageData() {
@@ -87,17 +148,34 @@ export default function HomePage() {
             DJ HAUNTER
           </Link>
 
-          <Link href="/admin" className="md:hidden group relative px-4 py-2 rounded-xl font-bold text-xs text-white transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(6,182,212,0.3)] overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-blue-700 opacity-90"></div>
-            <div className="relative z-10 flex items-center gap-1.5 drop-shadow-md">
-              <Zap className="h-3.5 w-3.5 text-cyan-200 fill-cyan-200/50" /> Portal
-            </div>
-          </Link>
+          {/* Mobile Portal / Favorites Layout */}
+          <div className="flex items-center gap-2.5 md:hidden">
+            <button 
+              onClick={() => setShowFavoritesDrawer(true)}
+              className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-rose-400 transition-all relative active:scale-95"
+              title="Saved DJs"
+            >
+              <Heart className={`h-4 w-4 transition-transform duration-300 ${favoritesCount > 0 ? 'fill-rose-500 text-rose-500 scale-110 animate-pulse' : ''}`} />
+              {favoritesCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-gradient-to-r from-rose-500 to-pink-500 text-white font-black text-[8px] w-4.5 h-4.5 flex items-center justify-center rounded-full border border-slate-950 shadow-md">
+                  {favoritesCount}
+                </span>
+              )}
+            </button>
+
+            <Link href="/admin" className="group relative px-4 py-2.5 rounded-xl font-bold text-xs text-white transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(6,182,212,0.3)] overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-blue-700 opacity-90"></div>
+              <div className="relative z-10 flex items-center gap-1.5 drop-shadow-md">
+                <Zap className="h-3.5 w-3.5 text-cyan-200 fill-cyan-200/50" /> Portal
+              </div>
+            </Link>
+          </div>
         </div>
 
         <form onSubmit={handleManualSearch} className="flex w-full md:flex-1 md:max-w-xl md:mx-8 relative group">
           <input 
             type="text" 
+            suppressHydrationWarning
             value={userSearchQuery}
             onChange={(event) => setUserSearchQuery(event.target.value)}
             placeholder="Search DJs, cities, or setups..." 
@@ -111,13 +189,29 @@ export default function HomePage() {
           </button>
         </form>
 
-        <Link href="/admin" className="hidden md:flex group relative px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(6,182,212,0.4)] overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-blue-700 opacity-90 group-hover:opacity-100 transition-opacity"></div>
-          <div className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent pointer-events-none"></div>
-          <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
-            <Zap className="h-4 w-4 text-cyan-200 fill-cyan-200/50" /> Partner Portal
-          </div>
-        </Link>
+        {/* Desktop Favorites and Portal Buttons */}
+        <div className="hidden md:flex items-center gap-4">
+          <button 
+            onClick={() => setShowFavoritesDrawer(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-400 rounded-xl font-bold text-sm transition-all shadow-inner relative group cursor-pointer active:scale-95"
+          >
+            <Heart className={`h-4 w-4 transition-transform duration-300 ${favoritesCount > 0 ? 'fill-rose-500 text-rose-500 scale-110' : ''}`} />
+            <span>Saved DJs</span>
+            {favoritesCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-gradient-to-r from-rose-500 to-pink-500 text-white font-black text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-950 shadow-md">
+                {favoritesCount}
+              </span>
+            )}
+          </button>
+
+          <Link href="/admin" className="group relative px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(6,182,212,0.4)] overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-blue-700 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent pointer-events-none"></div>
+            <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
+              <Zap className="h-4 w-4 text-cyan-200 fill-cyan-200/50" /> Partner Portal
+            </div>
+          </Link>
+        </div>
       </nav>
 
       {/* 
@@ -284,6 +378,106 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {/* GLOSSY SLIDING DRAWER FOR FAVORITES */}
+      {showFavoritesDrawer && (
+        <div className="fixed inset-0 z-[100] flex justify-end">
+          {/* Backdrop blur */}
+          <div 
+            onClick={() => setShowFavoritesDrawer(false)}
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity duration-300"
+          ></div>
+
+          {/* Drawer Panel */}
+          <div className="relative w-full max-w-md bg-slate-900/90 backdrop-blur-2xl border-l border-slate-800 shadow-[0_0_50px_rgba(0,0,0,0.8)] h-full flex flex-col z-10 animate-in slide-in-from-right duration-300">
+            {/* Glossy top edge light */}
+            <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent"></div>
+            
+            {/* Header */}
+            <div className="p-6 border-b border-slate-800/80 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-rose-500/10 rounded-lg border border-rose-500/20 shadow-inner">
+                  <Heart className="h-5 w-5 text-rose-400 fill-rose-500/20" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-white">Your Saved Setups</h3>
+                  <p className="text-[10px] font-black text-rose-400/70 uppercase tracking-widest">Saved in local terminal</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowFavoritesDrawer(false)}
+                className="p-2 hover:bg-slate-800 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* List Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+              {favoriteDjs.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 px-4">
+                  <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-full mb-4 shadow-inner">
+                    <Heart className="h-10 w-10 text-slate-700 animate-pulse" />
+                  </div>
+                  <h4 className="font-black text-white uppercase text-xs tracking-wider mb-2">No Saved DJs Yet</h4>
+                  <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+                    Explore our directory and click the <span className="text-rose-400">Save to Favorites</span> heart button on any DJ profile to keep them here!
+                  </p>
+                </div>
+              ) : (
+                favoriteDjs.map((dj) => (
+                  <Link 
+                    href={`/dj/${dj.id}`}
+                    key={dj.id}
+                    className="flex items-center gap-4 bg-slate-950/50 hover:bg-slate-950 border border-slate-800/60 hover:border-rose-500/20 p-3 rounded-2xl transition-all shadow-inner group/item relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
+
+                    {/* Image */}
+                    <div className="h-16 w-16 rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex-shrink-0 relative">
+                      {dj.media_urls && dj.media_urls.length > 0 ? (
+                        <img src={dj.media_urls[0]} alt={dj.dj_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Speaker className="h-5 w-5 text-slate-700 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                      )}
+                    </div>
+
+                    {/* Details */}
+                    <div className="flex-grow min-w-0">
+                      <h4 className="font-black text-sm text-white group-hover/item:text-rose-400 transition-colors truncate mb-0.5">{dj.dj_name}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mb-1.5">
+                        <MapPin className="h-3 w-3 text-cyan-500" /> {dj.city}, {dj.state}
+                      </p>
+                      <p className="text-xs font-black text-rose-300">₹ {dj.price}</p>
+                    </div>
+
+                    {/* Remove button */}
+                    <button 
+                      onClick={(e) => handleRemoveFavorite(dj.id, e)}
+                      className="p-2.5 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 hover:border-rose-500 text-rose-400 hover:text-white rounded-xl transition-all cursor-pointer flex-shrink-0 shadow-md group-hover/item:scale-105 active:scale-95"
+                      title="Remove from favorites"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </Link>
+                ))
+              )}
+            </div>
+
+            {/* Footer action */}
+            {favoriteDjs.length > 0 && (
+              <div className="p-6 border-t border-slate-800/80 bg-slate-950/30">
+                <button 
+                  onClick={() => setShowFavoritesDrawer(false)}
+                  className="w-full py-4 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors cursor-pointer"
+                >
+                  Close Saved Directory
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, MapPin, Speaker, Phone, MessageCircle, MonitorPlay, Camera, CheckCircle2, Flame, ShieldCheck, Heart, Share2, Check, ChevronLeft, ChevronRight, Star, MessageSquare } from 'lucide-react';
 import { supabase } from '@/utils/supabase';
@@ -27,6 +27,76 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState(false);
   const [reviewError, setReviewError] = useState(null);
+
+  // Memoized parsed videos to guarantee complete safety against Temporal Dead Zone (TDZ)
+  // and stable references to prevent unnecessary intersection observer effect executions.
+  const parsedVideos = useMemo(() => {
+    const videos = [];
+    
+    const parseVideoUrl = (url) => {
+      if (!url) return null;
+      const trimmed = url.trim();
+      
+      // 1. YouTube Shorts
+      const ytShortsRegex = /(?:youtube\.com|youtu\.be)\/shorts\/([a-zA-Z0-9_-]+)/i;
+      const ytShortsMatch = trimmed.match(ytShortsRegex);
+      if (ytShortsMatch) {
+        return {
+          embedUrl: `https://www.youtube.com/embed/${ytShortsMatch[1]}?enablejsapi=1`,
+          type: 'youtube-shorts',
+          orientation: 'vertical',
+          label: 'YouTube Shorts'
+        };
+      }
+
+      // 2. Instagram Reels / Posts
+      const igReelRegex = /instagram\.com\/(?:reel|reels|p)\/([a-zA-Z0-9_-]+)/i;
+      const igReelMatch = trimmed.match(igReelRegex);
+      if (igReelMatch) {
+        return {
+          embedUrl: `https://www.instagram.com/reel/${igReelMatch[1]}/embed`,
+          type: 'instagram-reel',
+          orientation: 'vertical',
+          label: 'Instagram Reel'
+        };
+      }
+
+      // 3. Standard YouTube Video
+      const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
+      const ytMatch = trimmed.match(ytRegex);
+      if (ytMatch) {
+        return {
+          embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?enablejsapi=1`,
+          type: 'youtube',
+          orientation: 'horizontal',
+          label: 'Live Performance'
+        };
+      }
+
+      return null;
+    };
+
+    if (activeDjProfileData?.performance_urls && activeDjProfileData.performance_urls.length > 0) {
+      activeDjProfileData.performance_urls.forEach((url) => {
+        const parsed = parseVideoUrl(url);
+        if (parsed) videos.push(parsed);
+      });
+    }
+    
+    // Fallback compatibility check
+    if (videos.length === 0) {
+      if (activeDjProfileData?.youtube_url) {
+        const parsed = parseVideoUrl(activeDjProfileData.youtube_url);
+        if (parsed) videos.push(parsed);
+      }
+      if (activeDjProfileData?.instagram_url) {
+        const parsed = parseVideoUrl(activeDjProfileData.instagram_url);
+        if (parsed) videos.push(parsed);
+      }
+    }
+
+    return videos;
+  }, [activeDjProfileData]);
 
   const fetchReviews = async () => {
     if (!targetDjProfileId) return;
@@ -103,13 +173,58 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
     }
   };
 
-  const scrollVideos = (direction, isMobile = false) => {
-    const container = isMobile ? mobileScrollContainerRef.current : desktopScrollContainerRef.current;
+  const scrollVideos = (direction) => {
+    const container = desktopScrollContainerRef.current;
     if (container) {
       const scrollAmount = direction === 'left' ? -400 : 400;
       container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
     }
   };
+
+  // IntersectionObserver to auto-pause videos scrolled out of view
+  useEffect(() => {
+    const container = desktopScrollContainerRef.current;
+    if (!container || parsedVideos.length === 0) return;
+
+    const observerOptions = {
+      root: container,
+      threshold: 0.25, // Trigger when less than 25% of the video card is visible
+    };
+
+    const handleIntersection = (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          const iframe = entry.target.querySelector('iframe');
+          if (iframe) {
+            try {
+              // 1. YouTube iframe postMessage pauseVideo API
+              iframe.contentWindow.postMessage(
+                JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+                '*'
+              );
+            } catch (e) {
+              console.error("Failed to post pause command:", e);
+            }
+
+            // 2. Cross-platform / Instagram fallback: Reset src to instantly cut off audio output
+            const currentSrc = iframe.getAttribute('src');
+            if (currentSrc) {
+              iframe.setAttribute('src', currentSrc);
+            }
+          }
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(handleIntersection, observerOptions);
+    const cards = container.querySelectorAll('.video-card-item');
+    cards.forEach((card) => observer.observe(card));
+
+    return () => {
+      cards.forEach((card) => observer.unobserve(card));
+      observer.disconnect();
+    };
+  }, [parsedVideos]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && targetDjProfileId) {
@@ -158,71 +273,6 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
       }
     }
   };
-
-  // Video URL Parser
-  const parseVideoUrl = (url) => {
-    if (!url) return null;
-    const trimmed = url.trim();
-    
-    // 1. YouTube Shorts
-    const ytShortsRegex = /(?:youtube\.com|youtu\.be)\/shorts\/([a-zA-Z0-9_-]+)/i;
-    const ytShortsMatch = trimmed.match(ytShortsRegex);
-    if (ytShortsMatch) {
-      return {
-        embedUrl: `https://www.youtube.com/embed/${ytShortsMatch[1]}`,
-        type: 'youtube-shorts',
-        orientation: 'vertical',
-        label: 'YouTube Shorts'
-      };
-    }
-
-    // 2. Instagram Reels / Posts
-    const igReelRegex = /instagram\.com\/(?:reel|reels|p)\/([a-zA-Z0-9_-]+)/i;
-    const igReelMatch = trimmed.match(igReelRegex);
-    if (igReelMatch) {
-      return {
-        embedUrl: `https://www.instagram.com/reel/${igReelMatch[1]}/embed`,
-        type: 'instagram-reel',
-        orientation: 'vertical',
-        label: 'Instagram Reel'
-      };
-    }
-
-    // 3. Standard YouTube Video
-    const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
-    const ytMatch = trimmed.match(ytRegex);
-    if (ytMatch) {
-      return {
-        embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}`,
-        type: 'youtube',
-        orientation: 'horizontal',
-        label: 'Live Performance'
-      };
-    }
-
-    return null;
-  };
-
-  const parsedVideos = [];
-  
-  if (activeDjProfileData?.performance_urls && activeDjProfileData.performance_urls.length > 0) {
-    activeDjProfileData.performance_urls.forEach((url) => {
-      const parsed = parseVideoUrl(url);
-      if (parsed) parsedVideos.push(parsed);
-    });
-  }
-  
-  // Fallback compatibility check
-  if (parsedVideos.length === 0) {
-    if (activeDjProfileData?.youtube_url) {
-      const parsed = parseVideoUrl(activeDjProfileData.youtube_url);
-      if (parsed) parsedVideos.push(parsed);
-    }
-    if (activeDjProfileData?.instagram_url) {
-      const parsed = parseVideoUrl(activeDjProfileData.instagram_url);
-      if (parsed) parsedVideos.push(parsed);
-    }
-  }
 
   useEffect(() => {
     async function loadPublicDjProfileDatabaseRecordFallback() {
@@ -423,6 +473,98 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               </div>
             </div>
 
+            {/* Unified Live Performance Carousel Section */}
+            {parsedVideos.length > 0 && (
+              <div className="bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/20 border-t-cyan-500/30 rounded-[2rem] p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden mt-6">
+                <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
+                <div className="absolute top-0 right-0 w-60 h-60 bg-cyan-500/5 rounded-full blur-[80px] pointer-events-none"></div>
+                
+                <div className="flex items-center justify-between mb-2 relative z-10">
+                  <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2 sm:gap-3">
+                    <div className="p-2 sm:p-2.5 bg-cyan-500/15 rounded-xl border border-cyan-500/30 shadow-inner">
+                      <MonitorPlay className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-400" />
+                    </div>
+                    Live Performance
+                  </h2>
+                  
+                  {/* Proximity Navigation Arrows */}
+                  {parsedVideos.length > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => scrollVideos('left')}
+                        className="p-2 sm:p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
+                        aria-label="Scroll left"
+                      >
+                        <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                      <button
+                        onClick={() => scrollVideos('right')}
+                        className="p-2 sm:p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
+                        aria-label="Scroll right"
+                      >
+                        <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-slate-400 text-xs sm:text-sm mb-6 sm:mb-8 ml-1 relative z-10">Watch live setups, lighting displays, and earth-shattering bass checks in action.</p>
+
+                {/* Horizontal Scrollable Container */}
+                <div 
+                  ref={desktopScrollContainerRef}
+                  className="flex gap-4 sm:gap-6 overflow-x-auto hide-scrollbar pb-6 snap-x snap-mandatory scroll-smooth relative z-10 -mx-4 px-4 sm:mx-0 sm:px-0"
+                >
+                  {parsedVideos.map((video, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`video-card-item flex-shrink-0 snap-start bg-slate-950/60 border border-slate-800 p-4 sm:p-6 rounded-[1.5rem] sm:rounded-3xl flex flex-col items-center justify-between shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-300 ${
+                        video.orientation === 'vertical' ? 'w-[240px] sm:w-[320px]' : 'w-full max-w-[280px] sm:max-w-none sm:w-[500px]'
+                      }`}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent pointer-events-none"></div>
+                      
+                      <div className="w-full flex items-center justify-between mb-3 sm:mb-4 border-b border-slate-800/80 pb-2 sm:pb-3">
+                        <span className="text-[10px] sm:text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-ping"></span>
+                          Clip #{idx + 1}
+                        </span>
+                        <span className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-0.5 sm:py-1 rounded-md">{video.label}</span>
+                      </div>
+
+                      <div className="w-full flex-grow flex items-center justify-center py-1 sm:py-2">
+                        {video.orientation === 'vertical' ? (
+                          /* Vertical 9:16 player styled as smartphone */
+                          <div className="w-full max-w-[180px] sm:max-w-[240px] relative rounded-2xl sm:rounded-[2rem] overflow-hidden border-[4px] sm:border-[6px] border-slate-900 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-[9/16] bg-slate-950">
+                            {/* notch */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 sm:w-20 h-3 sm:h-4 bg-slate-900 rounded-b-xl z-20 flex items-center justify-center">
+                              <div className="w-4 sm:w-5 h-0.5 bg-slate-700 rounded-full mb-0.5"></div>
+                            </div>
+                            <iframe
+                              src={video.embedUrl}
+                              title={`Performance clip #${idx + 1}`}
+                              className="w-full h-full border-0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              allowFullScreen
+                            ></iframe>
+                          </div>
+                        ) : (
+                          /* Horizontal 16:9 player */
+                          <div className="w-full relative rounded-xl sm:rounded-2xl overflow-hidden border border-slate-800 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-video bg-slate-950">
+                            <iframe
+                              src={video.embedUrl}
+                              title={`Performance clip #${idx + 1}`}
+                              className="w-full h-full border-0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              allowFullScreen
+                            ></iframe>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Hardware Specifications Card */}
             <div className="bg-slate-900/50 backdrop-blur-2xl border border-indigo-500/30 border-t-indigo-400/40 rounded-3xl p-8 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.6)] relative overflow-hidden group">
@@ -440,291 +582,7 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               </div>
             </div>
 
-            {/* Dynamic Review & Rating System */}
-            <div className="bg-slate-900/50 backdrop-blur-2xl border border-amber-500/30 border-t-amber-400/40 rounded-3xl p-8 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.6)] relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none"></div>
-              
-              <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
-                <div className="p-2.5 bg-amber-500/15 rounded-xl border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
-                  <MessageSquare className="h-5 w-5 text-amber-400" />
-                </div>
-                User Reviews & Feedbacks
-              </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-8 relative z-10">
-                {/* Ratings Statistics Sidecard */}
-                <div className="md:col-span-2 flex flex-col justify-center items-center bg-slate-950/60 border border-slate-800 rounded-2xl p-6 text-center shadow-inner">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">AVERAGE RATING</p>
-                  <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-300 to-yellow-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">
-                    {reviews.length > 0 ? averageRating : '0.0'}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-3 mb-2">
-                    {[1, 2, 3, 4, 5].map((starIdx) => {
-                      const activeStarsCount = Math.round(Number(averageRating));
-                      return (
-                        <Star 
-                          key={starIdx} 
-                          className={`h-5 w-5 ${
-                            starIdx <= activeStarsCount 
-                              ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' 
-                              : 'text-slate-750'
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                  <p className="text-xs text-slate-400 font-bold mt-1">
-                    Based on {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
-                  </p>
-                </div>
-
-                {/* Submit New Review Form */}
-                <div className="md:col-span-3 bg-slate-950/40 border border-slate-800/80 rounded-2xl p-6 shadow-md">
-                  <h3 className="text-sm font-black text-white mb-4 uppercase tracking-widest border-b border-slate-800/80 pb-2">Share Your Experience</h3>
-                  
-                  <form onSubmit={handleSubmitReview} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Your Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={newReviewerName}
-                          onChange={(e) => setNewReviewerName(e.target.value)}
-                          placeholder="e.g. Rahul Sharma"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 transition-colors"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Your Rating</label>
-                        <div className="flex items-center gap-2 h-[38px]">
-                          {[1, 2, 3, 4, 5].map((starIdx) => (
-                            <button
-                              key={starIdx}
-                              type="button"
-                              onClick={() => setNewRating(starIdx)}
-                              onMouseEnter={() => setHoveredStar(starIdx)}
-                              onMouseLeave={() => setHoveredStar(0)}
-                              className="focus:outline-none transition-transform active:scale-90 cursor-pointer"
-                            >
-                              <Star 
-                                className={`h-6 w-6 transition-all ${
-                                  starIdx <= (hoveredStar || newRating)
-                                    ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] scale-110'
-                                    : 'text-slate-700 hover:text-slate-500 scale-100'
-                                }`}
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Review Comment</label>
-                      <textarea
-                        required
-                        rows="2"
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Tell us about their sound output, base check, lighting setup..."
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 transition-colors resize-none"
-                      ></textarea>
-                    </div>
-
-                    {reviewError && (
-                      <p className="text-red-400 text-xs font-semibold">{reviewError}</p>
-                    )}
-
-                    {reviewSubmitSuccess && (
-                      <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs p-3 rounded-lg flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4" /> Review submitted successfully!
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={isSubmittingReview}
-                      className="w-full bg-amber-600 hover:bg-amber-700 text-slate-950 font-black text-xs py-3 rounded-xl transition-all cursor-pointer shadow-[0_4px_15px_rgba(217,119,6,0.3)] hover:shadow-[0_4px_25px_rgba(217,119,6,0.5)] flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSubmittingReview ? 'Submitting...' : 'Post Review'}
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              {/* Scrollable Reviews Feed List */}
-              <div className="mt-8 relative z-10 border-t border-slate-800/80 pt-6">
-                <h3 className="text-sm font-black text-white mb-4 uppercase tracking-widest">Client Feedbacks</h3>
-                
-                {isFetchingReviews ? (
-                  <div className="flex flex-col items-center justify-center py-10">
-                    <div className="h-8 w-8 border-2 border-slate-800 border-t-amber-500 rounded-full animate-spin mb-3"></div>
-                    <p className="text-slate-500 text-xs font-bold tracking-widest uppercase">Fetching Reviews...</p>
-                  </div>
-                ) : reviews.length === 0 ? (
-                  <div className="bg-slate-950/40 border border-slate-800/50 rounded-2xl p-8 text-center text-slate-500">
-                    <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-400" />
-                    <p className="text-xs font-black uppercase tracking-wider mb-1">No reviews yet</p>
-                    <p className="text-xs text-slate-600">Be the first to share your experience with this DJ setup!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar select-none">
-                    {reviews.map((review) => (
-                      <div 
-                        key={review.id} 
-                        className="bg-slate-950/60 hover:bg-slate-950 border border-slate-800/80 hover:border-slate-700/60 p-5 rounded-2xl transition-all shadow-inner group/item"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-amber-500/20 to-yellow-600/20 border border-amber-500/30 flex items-center justify-center font-black text-amber-400 text-xs uppercase shadow-inner">
-                              {review.reviewer_name.charAt(0)}
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-black text-slate-200">{review.reviewer_name}</h4>
-                              <p className="text-[10px] text-slate-500 font-medium">
-                                {review.created_at ? new Date(review.created_at).toLocaleDateString('en-IN', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                }) : ''}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((starVal) => (
-                              <Star 
-                                key={starVal} 
-                                className={`h-3.5 w-3.5 ${
-                                  starVal <= review.rating 
-                                    ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_3px_rgba(245,158,11,0.5)]' 
-                                    : 'text-slate-850'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-xs text-slate-300 leading-relaxed font-medium pl-0 sm:pl-11 pr-2">
-                          {review.comment}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              {/* Portable Custom Scrollbar Styling */}
-              <style dangerouslySetInnerHTML={{__html: `
-                .custom-scrollbar::-webkit-scrollbar {
-                  width: 6px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                  background: rgba(2, 6, 23, 0.4);
-                  border-radius: 9999px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                  background: rgba(245, 158, 11, 0.2);
-                  border-radius: 9999px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                  background: rgba(245, 158, 11, 0.4);
-                }
-              `}} />
-            </div>
-
-            {/* Desktop Live Performance Carousel Section (Desktop only) */}
-            {parsedVideos.length > 0 && (
-              <div className="hidden lg:block bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/20 border-t-cyan-500/30 rounded-[2rem] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden mt-6">
-                <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
-                <div className="absolute top-0 right-0 w-60 h-60 bg-cyan-500/5 rounded-full blur-[80px] pointer-events-none"></div>
-                
-                <div className="flex items-center justify-between mb-2 relative z-10">
-                  <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                    <div className="p-2.5 bg-cyan-500/15 rounded-xl border border-cyan-500/30 shadow-inner">
-                      <MonitorPlay className="h-6 w-6 text-cyan-400" />
-                    </div>
-                    Live Performance
-                  </h2>
-                  
-                  {/* Premium Navigation Arrows for Horizontal Scroll */}
-                  {parsedVideos.length > 1 && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => scrollVideos('left')}
-                        className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
-                        aria-label="Scroll left"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => scrollVideos('right')}
-                        className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
-                        aria-label="Scroll right"
-                      >
-                        <ChevronRight className="h-5 w-5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <p className="text-slate-400 text-sm mb-8 ml-1 relative z-10">Watch live setups, lighting displays, and earth-shattering bass checks in action.</p>
-
-                {/* Horizontal Scrollable Container */}
-                <div 
-                  ref={desktopScrollContainerRef}
-                  className="flex gap-6 overflow-x-auto hide-scrollbar pb-6 snap-x snap-mandatory scroll-smooth relative z-10 -mx-4 px-4 sm:mx-0 sm:px-0"
-                >
-                  {parsedVideos.map((video, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`flex-shrink-0 snap-start bg-slate-950/60 border border-slate-800 p-6 rounded-3xl flex flex-col items-center justify-between shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-300 ${
-                        video.orientation === 'vertical' ? 'w-[280px] sm:w-[320px]' : 'w-full max-w-[320px] sm:max-w-none sm:w-[500px]'
-                      }`}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent pointer-events-none"></div>
-                      
-                      <div className="w-full flex items-center justify-between mb-4 border-b border-slate-800/80 pb-3">
-                        <span className="text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-ping"></span>
-                          Clip #{idx + 1}
-                        </span>
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-1 rounded-md">{video.label}</span>
-                      </div>
-
-                      <div className="w-full flex-grow flex items-center justify-center py-2">
-                        {video.orientation === 'vertical' ? (
-                          /* Vertical 9:16 player styled as a modern smartphone bezel */
-                          <div className="w-full max-w-[240px] relative rounded-[2rem] overflow-hidden border-[6px] border-slate-900 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-[9/16] bg-slate-950">
-                            {/* Smartphone camera/notch notch */}
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-4 bg-slate-900 rounded-b-xl z-20 flex items-center justify-center">
-                              <div className="w-5 h-0.5 bg-slate-700 rounded-full mb-0.5"></div>
-                            </div>
-                            <iframe
-                              src={video.embedUrl}
-                              title={`Performance clip #${idx + 1}`}
-                              className="w-full h-full border-0"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                              allowFullScreen
-                            ></iframe>
-                          </div>
-                        ) : (
-                          /* Horizontal 16:9 player styled as cinematic screen */
-                          <div className="w-full relative rounded-2xl overflow-hidden border border-slate-800 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-video bg-slate-950">
-                            <iframe
-                              src={video.embedUrl}
-                              title={`Performance clip #${idx + 1}`}
-                              className="w-full h-full border-0"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                              allowFullScreen
-                            ></iframe>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* RIGHT COLUMN: Booking & Contacts */}
@@ -858,98 +716,200 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
           </div>
         </div>
 
-        {/* Mobile Live Performance Carousel Section (Mobile only) */}
-        {parsedVideos.length > 0 && (
-          <div className="lg:hidden bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/20 border-t-cyan-500/30 rounded-[2rem] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden mt-10">
-            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
-            <div className="absolute top-0 right-0 w-60 h-60 bg-cyan-500/5 rounded-full blur-[80px] pointer-events-none"></div>
-            
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2 relative z-10">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                <div className="p-2.5 bg-cyan-500/15 rounded-xl border border-cyan-500/30 shadow-inner">
-                  <MonitorPlay className="h-6 w-6 text-cyan-400" />
-                </div>
-                Live Performance
-              </h2>
-              
-              {/* Premium Navigation Arrows for Horizontal Scroll */}
-              {parsedVideos.length > 1 && (
-                <div className="hidden md:flex items-center gap-2">
-                  <button
-                    onClick={() => scrollVideos('left', true)}
-                    className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
-                    aria-label="Scroll left"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => scrollVideos('right', true)}
-                    className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer shadow-md active:scale-95"
-                    aria-label="Scroll right"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-              )}
+        {/* Dynamic Review & Rating System (Moved here for full-width desktop and bottom stacking on mobile!) */}
+        <div className="bg-slate-900/50 backdrop-blur-2xl border border-amber-500/30 border-t-amber-400/40 rounded-3xl p-8 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.6)] relative overflow-hidden group mt-10">
+          <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none"></div>
+          
+          <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
+            <div className="p-2.5 bg-amber-500/15 rounded-xl border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+              <MessageSquare className="h-5 w-5 text-amber-400" />
             </div>
-            <p className="text-slate-400 text-sm mb-8 ml-1 relative z-10">Watch live setups, lighting displays, and earth-shattering bass checks in action.</p>
+            User Reviews & Feedbacks
+          </h2>
 
-            {/* Horizontal Scrollable Container */}
-            <div 
-              ref={mobileScrollContainerRef}
-              className="flex gap-6 overflow-x-auto hide-scrollbar pb-6 snap-x snap-mandatory scroll-smooth relative z-10 -mx-4 px-4 sm:mx-0 sm:px-0"
-            >
-              {parsedVideos.map((video, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex-shrink-0 snap-start bg-slate-950/60 border border-slate-800 p-6 rounded-3xl flex flex-col items-center justify-between shadow-lg relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-300 ${
-                    video.orientation === 'vertical' ? 'w-[280px] sm:w-[320px]' : 'w-full max-w-[320px] sm:max-w-none sm:w-[500px]'
-                  }`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent pointer-events-none"></div>
-                  
-                  <div className="w-full flex items-center justify-between mb-4 border-b border-slate-800/80 pb-3">
-                    <span className="text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-ping"></span>
-                      Clip #{idx + 1}
-                    </span>
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-1 rounded-md">{video.label}</span>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-8 relative z-10">
+            {/* Ratings Statistics Sidecard */}
+            <div className="md:col-span-2 flex flex-col justify-center items-center bg-slate-950/60 border border-slate-800 rounded-2xl p-6 text-center shadow-inner">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">AVERAGE RATING</p>
+              <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-300 to-yellow-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                {reviews.length > 0 ? averageRating : '0.0'}
+              </p>
+              <div className="flex items-center gap-1.5 mt-3 mb-2">
+                {[1, 2, 3, 4, 5].map((starIdx) => {
+                  const activeStarsCount = Math.round(Number(averageRating));
+                  return (
+                    <Star 
+                      key={starIdx} 
+                      className={`h-5 w-5 ${
+                        starIdx <= activeStarsCount 
+                          ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' 
+                          : 'text-slate-750'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+              <p className="text-xs text-slate-400 font-bold mt-1">
+                Based on {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+              </p>
+            </div>
+
+            {/* Submit New Review Form */}
+            <div className="md:col-span-3 bg-slate-950/40 border border-slate-800/80 rounded-2xl p-6 shadow-md">
+              <h3 className="text-sm font-black text-white mb-4 uppercase tracking-widest border-b border-slate-800/80 pb-2">Share Your Experience</h3>
+              
+              <form onSubmit={handleSubmitReview} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Your Name</label>
+                    <input
+                      type="text"
+                      suppressHydrationWarning
+                      required
+                      value={newReviewerName}
+                      onChange={(e) => setNewReviewerName(e.target.value)}
+                      placeholder="e.g. Rahul Sharma"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 transition-colors"
+                    />
                   </div>
-
-                  <div className="w-full flex-grow flex items-center justify-center py-2">
-                    {video.orientation === 'vertical' ? (
-                      /* Vertical 9:16 player styled as a modern smartphone bezel */
-                      <div className="w-full max-w-[240px] relative rounded-[2rem] overflow-hidden border-[6px] border-slate-900 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-[9/16] bg-slate-950">
-                        {/* Smartphone camera/notch notch */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-4 bg-slate-900 rounded-b-xl z-20 flex items-center justify-center">
-                          <div className="w-5 h-0.5 bg-slate-700 rounded-full mb-0.5"></div>
-                        </div>
-                        <iframe
-                          src={video.embedUrl}
-                          title={`Performance clip #${idx + 1}`}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowFullScreen
-                        ></iframe>
-                      </div>
-                    ) : (
-                      /* Horizontal 16:9 player styled as cinematic screen */
-                      <div className="w-full relative rounded-2xl overflow-hidden border border-slate-800 shadow-[0_20px_40px_rgba(0,0,0,0.8)] aspect-video bg-slate-950">
-                        <iframe
-                          src={video.embedUrl}
-                          title={`Performance clip #${idx + 1}`}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowFullScreen
-                        ></iframe>
-                      </div>
-                    )}
+                  
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Your Rating</label>
+                    <div className="flex items-center gap-2 h-[38px]">
+                      {[1, 2, 3, 4, 5].map((starIdx) => (
+                        <button
+                          key={starIdx}
+                          type="button"
+                          onClick={() => setNewRating(starIdx)}
+                          onMouseEnter={() => setHoveredStar(starIdx)}
+                          onMouseLeave={() => setHoveredStar(0)}
+                          className="focus:outline-none transition-transform active:scale-90 cursor-pointer"
+                        >
+                          <Star 
+                            className={`h-6 w-6 transition-all ${
+                              starIdx <= (hoveredStar || newRating)
+                                ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] scale-110'
+                                : 'text-slate-750 hover:text-slate-500 scale-100'
+                            }`}
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Review Comment</label>
+                  <textarea
+                    required
+                    suppressHydrationWarning
+                    rows="2"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Tell us about their sound output, base check, lighting setup..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 transition-colors resize-none"
+                  ></textarea>
+                </div>
+
+                {reviewError && (
+                  <p className="text-red-400 text-xs font-semibold">{reviewError}</p>
+                )}
+
+                {reviewSubmitSuccess && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs p-3 rounded-lg flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" /> Review submitted successfully!
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingReview}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-slate-950 font-black text-xs py-3 rounded-xl transition-all cursor-pointer shadow-[0_4px_15px_rgba(217,119,6,0.3)] hover:shadow-[0_4px_25px_rgba(217,119,6,0.5)] flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmittingReview ? 'Submitting...' : 'Post Review'}
+                </button>
+              </form>
             </div>
           </div>
-        )}
+
+          {/* Scrollable Reviews Feed List */}
+          <div className="mt-8 relative z-10 border-t border-slate-800/80 pt-6">
+            <h3 className="text-sm font-black text-white mb-4 uppercase tracking-widest">Client Feedbacks</h3>
+            
+            {isFetchingReviews ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <div className="h-8 w-8 border-2 border-slate-800 border-t-amber-500 rounded-full animate-spin mb-3"></div>
+                <p className="text-slate-500 text-xs font-bold tracking-widest uppercase">Fetching Reviews...</p>
+              </div>
+            ) : reviews.length === 0 ? (
+              <div className="bg-slate-950/40 border border-slate-800/50 rounded-2xl p-8 text-center text-slate-500">
+                <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-400" />
+                <p className="text-xs font-black uppercase tracking-wider mb-1">No reviews yet</p>
+                <p className="text-xs text-slate-600">Be the first to share your experience with this DJ setup!</p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar select-none">
+                {reviews.map((review) => (
+                  <div 
+                    key={review.id} 
+                    className="bg-slate-950/60 hover:bg-slate-950 border border-slate-800/80 hover:border-slate-700/60 p-5 rounded-2xl transition-all shadow-inner group/item"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-amber-500/20 to-yellow-600/20 border border-amber-500/30 flex items-center justify-center font-black text-amber-400 text-xs uppercase shadow-inner">
+                          {review.reviewer_name.charAt(0)}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-slate-200">{review.reviewer_name}</h4>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            {review.created_at ? new Date(review.created_at).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            }) : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((starVal) => (
+                          <Star 
+                            key={starVal} 
+                            className={`h-3.5 w-3.5 ${
+                              starVal <= review.rating 
+                                ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_3px_rgba(245,158,11,0.5)]' 
+                                : 'text-slate-850'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed font-medium pl-0 sm:pl-11 pr-2">
+                      {review.comment}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Portable Custom Scrollbar Styling */}
+          <style dangerouslySetInnerHTML={{__html: `
+            .custom-scrollbar::-webkit-scrollbar {
+              width: 6px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-track {
+              background: rgba(2, 6, 23, 0.4);
+              border-radius: 9999px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+              background: rgba(245, 158, 11, 0.2);
+              border-radius: 9999px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+              background: rgba(245, 158, 11, 0.4);
+            }
+          `}} />
+        </div>
 
       </div>
     </div>

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MapPin, ArrowLeft, Filter, CheckCircle2, Frown } from 'lucide-react';
 import { supabase } from '@/utils/supabase';
+import { geocodeAddress, calculateDistance } from '@/utils/geocoder';
 
 function SearchResultsDataFetcher() {
   const activeSearchParams = useSearchParams();
@@ -16,24 +17,189 @@ function SearchResultsDataFetcher() {
 
   const [retrievedDjResults, setRetrievedDjResults] = useState([]);
   const [isSearchEngineLoading, setIsSearchEngineLoading] = useState(true);
+  const [searchInfoText, setSearchInfoText] = useState('');
 
   useEffect(() => {
     async function executeDatabaseSearch() {
       setIsSearchEngineLoading(true);
+      setSearchInfoText('Initializing proximity search...');
       
       try {
-        let databaseSearchQuery = supabase.from('dj_directory').select('*');
-
-        if (userSearchQueryTerm) {
-          databaseSearchQuery = databaseSearchQuery.or(`dj_name.ilike.%${userSearchQueryTerm}%,city.ilike.%${userSearchQueryTerm}%,district.ilike.%${userSearchQueryTerm}%`);
+        // Fetch all DJs from Supabase directory
+        const { data: allDjs, error: fetchError } = await supabase
+          .from('dj_directory')
+          .select('*');
+          
+        if (fetchError) throw fetchError;
+        if (!allDjs || allDjs.length === 0) {
+          setRetrievedDjResults([]);
+          setSearchInfoText('No DJs registered in the system.');
+          return;
         }
 
-        const { data: fetchedSearchResults, error: databaseSearchError } = await databaseSearchQuery;
-        
-        if (databaseSearchError) throw databaseSearchError;
-        setRetrievedDjResults(fetchedSearchResults || []);
+        // 1. Proximity search by browser coordinates
+        if (userLatitudeCoordinates && userLongitudeCoordinates) {
+          const userLat = parseFloat(userLatitudeCoordinates);
+          const userLng = parseFloat(userLongitudeCoordinates);
+          
+          setSearchInfoText(`Scanning proximity to coordinates (${userLat.toFixed(2)}, ${userLng.toFixed(2)})...`);
+
+          const processedDjs = [];
+          for (const dj of allDjs) {
+            let djLat = null, djLng = null;
+            // Attempt geocoding pincode, then city
+            if (dj.pincode) {
+              const loc = await geocodeAddress(dj.pincode);
+              if (loc) { djLat = loc.lat; djLng = loc.lng; }
+            }
+            if ((djLat === null || djLng === null) && dj.city) {
+              const loc = await geocodeAddress(dj.city);
+              if (loc) { djLat = loc.lat; djLng = loc.lng; }
+            }
+            
+            if (djLat !== null && djLng !== null) {
+              const distance = calculateDistance(userLat, userLng, djLat, djLng);
+              processedDjs.push({ ...dj, distance });
+            } else {
+              processedDjs.push({ ...dj, distance: 99999 }); // Maximum fallback distance
+            }
+          }
+
+          // Sort by distance low to high
+          processedDjs.sort((a, b) => a.distance - b.distance);
+          setRetrievedDjResults(processedDjs);
+          setSearchInfoText(`Found ${processedDjs.length} DJs near you, sorted by distance.`);
+          return;
+        }
+
+        // 2. Proximity search by text query
+        if (userSearchQueryTerm && userSearchQueryTerm.trim()) {
+          const query = userSearchQueryTerm.trim().toLowerCase();
+          
+          // A. DIRECT NAME SEARCH CHECK
+          const nameMatches = allDjs.filter(dj => 
+            dj.dj_name.toLowerCase().includes(query)
+          );
+          
+          // B. LOCATION GEOCODE
+          setSearchInfoText(`Geocoding query: "${userSearchQueryTerm}"...`);
+          const queryLocation = await geocodeAddress(query);
+          
+          if (queryLocation) {
+            setSearchInfoText(`Analyzing distances around "${userSearchQueryTerm}"...`);
+            
+            const djsWithDistances = [];
+            for (const dj of allDjs) {
+              let djLat = null, djLng = null;
+              if (dj.pincode) {
+                const loc = await geocodeAddress(dj.pincode);
+                if (loc) { djLat = loc.lat; djLng = loc.lng; }
+              }
+              if ((djLat === null || djLng === null) && dj.city) {
+                const loc = await geocodeAddress(dj.city);
+                if (loc) { djLat = loc.lat; djLng = loc.lng; }
+              }
+              if ((djLat === null || djLng === null) && dj.district) {
+                const loc = await geocodeAddress(dj.district);
+                if (loc) { djLat = loc.lat; djLng = loc.lng; }
+              }
+
+              if (djLat !== null && djLng !== null) {
+                const distance = calculateDistance(queryLocation.lat, queryLocation.lng, djLat, djLng);
+                djsWithDistances.push({ ...dj, distance });
+              } else {
+                djsWithDistances.push({ ...dj, distance: 99999 });
+              }
+            }
+
+            let filteredDjs = [];
+            let currentRadius = 0;
+
+            if (queryLocation.type === 'state') {
+              // State search: filter all DJs in that state, sort by distance
+              filteredDjs = djsWithDistances.filter(dj => 
+                (dj.state && dj.state.toLowerCase().includes(query)) ||
+                (dj.city && dj.city.toLowerCase().includes(query)) ||
+                dj.distance <= 500 // broad state boundary
+              );
+              filteredDjs.sort((a, b) => a.distance - b.distance);
+              setSearchInfoText(`Showing all DJs in ${queryLocation.type} "${userSearchQueryTerm}" sorted by proximity.`);
+            } else if (queryLocation.type === 'district') {
+              // District search: circular loop starting at 50km
+              const districtRadii = [50, 100, 150, 200, 500];
+              for (const r of districtRadii) {
+                const matches = djsWithDistances.filter(dj => dj.distance <= r);
+                if (matches.length > 0) {
+                  filteredDjs = matches;
+                  currentRadius = r;
+                  break;
+                }
+              }
+              filteredDjs.sort((a, b) => a.distance - b.distance);
+              setSearchInfoText(
+                filteredDjs.length > 0 
+                  ? `Found within ${currentRadius} km district radius of "${userSearchQueryTerm}" (sorted low-to-high).`
+                  : `No DJs located within 500 km of "${userSearchQueryTerm}".`
+              );
+            } else {
+              // City/Area search: circular loop 1km -> 10km -> 20km -> 50km -> 100km -> 200km -> 500km
+              const cityRadii = [1, 10, 20, 50, 100, 200, 500];
+              for (const r of cityRadii) {
+                const matches = djsWithDistances.filter(dj => dj.distance <= r);
+                if (matches.length > 0) {
+                  filteredDjs = matches;
+                  currentRadius = r;
+                  break;
+                }
+              }
+              filteredDjs.sort((a, b) => a.distance - b.distance);
+              setSearchInfoText(
+                filteredDjs.length > 0 
+                  ? `Found within ${currentRadius} km city radius of "${userSearchQueryTerm}" (sorted low-to-high).`
+                  : `No DJs located within 500 km of "${userSearchQueryTerm}".`
+              );
+            }
+
+            // Combine name matches and proximity matches, removing duplicates
+            const combinedResults = [...nameMatches];
+            filteredDjs.forEach(fdj => {
+              if (!combinedResults.some(dj => dj.id === fdj.id)) {
+                combinedResults.push(fdj);
+              }
+            });
+
+            setRetrievedDjResults(combinedResults);
+            
+            if (nameMatches.length > 0) {
+              setSearchInfoText(`Direct name matches shown first. Located ${combinedResults.length} setups in total.`);
+            }
+            return;
+          }
+
+          // Fallback if geocoding yields no results but name matches exist
+          if (nameMatches.length > 0) {
+            setRetrievedDjResults(nameMatches);
+            setSearchInfoText(`Showing direct name matches for "${userSearchQueryTerm}".`);
+            return;
+          }
+        }
+
+        // 3. Fallback database OR search (if no coords and no direct name matches)
+        let fallbackDjs = allDjs;
+        if (userSearchQueryTerm) {
+          const query = userSearchQueryTerm.trim().toLowerCase();
+          fallbackDjs = allDjs.filter(dj => 
+            (dj.dj_name && dj.dj_name.toLowerCase().includes(query)) ||
+            (dj.city && dj.city.toLowerCase().includes(query)) ||
+            (dj.district && dj.district.toLowerCase().includes(query)) ||
+            (dj.state && dj.state.toLowerCase().includes(query))
+          );
+        }
+        setRetrievedDjResults(fallbackDjs);
+        setSearchInfoText(userSearchQueryTerm ? `Showing keyword matches for "${userSearchQueryTerm}".` : `Displaying all ${allDjs.length} registered setups.`);
       } catch (error) {
         console.error("Critical error executing search query:", error);
+        setSearchInfoText('Search engine encountered an operational error.');
       } finally {
         setIsSearchEngineLoading(false);
       }
@@ -58,10 +224,10 @@ function SearchResultsDataFetcher() {
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight drop-shadow-md">
               {userSearchQueryTerm ? `Search results for "${userSearchQueryTerm}"` : 
                userLatitudeCoordinates && userLongitudeCoordinates ? `DJs Near Your Location` : 
-               'All DJs in Directory'}
+                'All DJs in Directory'}
             </h1>
             <p className="text-cyan-100/50 text-sm font-medium mt-1">
-              {isSearchEngineLoading ? 'Scanning network database...' : `Found ${retrievedDjResults.length} matching setups.`}
+              {isSearchEngineLoading ? 'Scanning network database...' : `${searchInfoText} (Found ${retrievedDjResults.length} setups)`}
             </p>
           </div>
         </div>
@@ -118,6 +284,12 @@ function SearchResultsDataFetcher() {
                 <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 text-slate-200 text-sm font-bold drop-shadow-md">
                   <MapPin className="h-4 w-4 text-cyan-400" /> {djProfileData.city}, {djProfileData.district}
                 </div>
+                
+                {djProfileData.distance !== undefined && djProfileData.distance < 9999 && (
+                  <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 bg-cyan-950/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl text-[10px] font-black text-cyan-300 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.4)] uppercase tracking-wider">
+                    {djProfileData.distance.toFixed(1)} km
+                  </div>
+                )}
               </div>
 
               {/* Content Area */}
