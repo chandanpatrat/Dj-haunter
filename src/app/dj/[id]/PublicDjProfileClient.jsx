@@ -28,6 +28,10 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
   const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState(false);
   const [reviewError, setReviewError] = useState(null);
 
+  // Multiple Contact Numbers states
+  const [showPhoneOptions, setShowPhoneOptions] = useState(false);
+  const [showWhatsappOptions, setShowWhatsappOptions] = useState(false);
+
   // Memoized parsed videos to guarantee complete safety against Temporal Dead Zone (TDZ)
   // and stable references to prevent unnecessary intersection observer effect executions.
   const parsedVideos = useMemo(() => {
@@ -96,6 +100,46 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
     }
 
     return videos;
+  }, [activeDjProfileData]);
+
+  // Parse multiple phone numbers to handle options
+  const phoneNumbersList = useMemo(() => {
+    const rawPhone = activeDjProfileData?.phone;
+    if (!rawPhone) return [];
+    const parts = rawPhone.split(/[,/;\n\r]+|(?:\s+and\s+)/i);
+    const result = [];
+    parts.forEach(part => {
+      const trimmed = part.trim();
+      if (!trimmed) return;
+      const digits = trimmed.replace(/[^0-9+]/g, '');
+      if (digits.length >= 8) {
+        result.push({
+          rawNumber: digits,
+          displayText: trimmed
+        });
+      }
+    });
+    return result;
+  }, [activeDjProfileData]);
+
+  // Parse multiple WhatsApp numbers to handle options
+  const whatsappNumbersList = useMemo(() => {
+    const rawWhatsapp = activeDjProfileData?.whatsapp;
+    if (!rawWhatsapp) return [];
+    const parts = rawWhatsapp.split(/[,/;\n\r]+|(?:\s+and\s+)/i);
+    const result = [];
+    parts.forEach(part => {
+      const trimmed = part.trim();
+      if (!trimmed) return;
+      const digits = trimmed.replace(/[^0-9]/g, '');
+      if (digits.length >= 8) {
+        result.push({
+          rawNumber: digits,
+          displayText: trimmed
+        });
+      }
+    });
+    return result;
   }, [activeDjProfileData]);
 
   const fetchReviews = async () => {
@@ -610,30 +654,106 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               </div>
               
               <div className="flex flex-col gap-4 relative z-10">
-                <a 
-                  href={formattedPhoneDialerLink}
-                  className="w-full group relative px-6 py-4 rounded-xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(6,182,212,0.4)] hover:shadow-[0_15px_30px_rgba(6,182,212,0.6)] overflow-hidden flex items-center justify-center gap-3 border border-cyan-400/50"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-blue-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent pointer-events-none"></div>
-                  <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
-                    <Phone className="h-5 w-5 text-white" /> Call Now: {activeDjProfileData.phone}
-                  </div>
-                </a>
-
-                {formattedWhatsappLink && (
+                {/* --- CONTACT PHONE SYSTEM --- */}
+                {phoneNumbersList.length <= 1 ? (
+                  // Single phone number - standard premium link button
                   <a 
-                    href={formattedWhatsappLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full group relative px-6 py-4 rounded-xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_15px_30px_rgba(16,185,129,0.5)] overflow-hidden flex items-center justify-center gap-3 border border-emerald-500/40"
+                    href={`tel:${phoneNumbersList[0]?.rawNumber || activeDjProfileData.phone.replace(/[^0-9+]/g, '')}`}
+                    className="w-full group relative px-6 py-4 rounded-xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(6,182,212,0.4)] hover:shadow-[0_15px_30px_rgba(6,182,212,0.6)] overflow-hidden flex items-center justify-center gap-3 border border-cyan-400/50"
                   >
-                    <div className="absolute inset-0 bg-emerald-600 opacity-80 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-blue-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent pointer-events-none"></div>
                     <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
-                      <MessageCircle className="h-5 w-5 text-white" /> Chat on WhatsApp
+                      <Phone className="h-5 w-5 text-white" /> Call Now: {phoneNumbersList[0]?.displayText || activeDjProfileData.phone}
                     </div>
                   </a>
+                ) : (
+                  // Multiple phone numbers - interactive expanding selection
+                  <div className="w-full flex flex-col gap-2">
+                    <button 
+                      onClick={() => setShowPhoneOptions(!showPhoneOptions)}
+                      className="w-full group relative px-6 py-4 rounded-xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(6,182,212,0.3)] hover:shadow-[0_15px_30px_rgba(6,182,212,0.5)] overflow-hidden flex items-center justify-center gap-3 border border-cyan-400/50 cursor-pointer"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 to-blue-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent pointer-events-none"></div>
+                      <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
+                        <Phone className="h-5 w-5 text-white" /> 
+                        Choose Number to Call ({phoneNumbersList.length})
+                      </div>
+                    </button>
+                    
+                    {showPhoneOptions && (
+                      <div className="bg-slate-950/80 backdrop-blur-md border border-cyan-500/30 rounded-xl p-2.5 space-y-2 animate-fade-in shadow-inner max-h-[220px] overflow-y-auto custom-scrollbar">
+                        <p className="text-[10px] font-black text-cyan-400 uppercase tracking-widest px-2 mb-1">Select a Contact Number:</p>
+                        {phoneNumbersList.map((phone, idx) => (
+                          <a 
+                            key={idx}
+                            href={`tel:${phone.rawNumber}`}
+                            className="w-full bg-slate-900/60 hover:bg-slate-800 border border-slate-800/80 hover:border-cyan-500/40 rounded-lg p-3 text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center justify-between group/item"
+                          >
+                            <span className="truncate max-w-[180px]">{phone.displayText}</span>
+                            <span className="text-[10px] uppercase font-black px-2 py-1 bg-cyan-500/10 text-cyan-400 rounded group-hover/item:bg-cyan-500 group-hover/item:text-slate-950 transition-all flex items-center gap-1">
+                              <Phone className="h-3 w-3" /> Call
+                            </span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* --- WHATSAPP SYSTEM --- */}
+                {whatsappNumbersList.length > 0 && (
+                  whatsappNumbersList.length <= 1 ? (
+                    // Single WhatsApp number - standard link button
+                    <a 
+                      href={`https://wa.me/${whatsappNumbersList[0].rawNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full group relative px-6 py-4 rounded-xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_15px_30px_rgba(16,185,129,0.5)] overflow-hidden flex items-center justify-center gap-3 border border-emerald-500/40"
+                    >
+                      <div className="absolute inset-0 bg-emerald-600 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+                      <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
+                        <MessageCircle className="h-5 w-5 text-white" /> Chat on WhatsApp: {whatsappNumbersList[0].displayText}
+                      </div>
+                    </a>
+                  ) : (
+                    // Multiple WhatsApp numbers - interactive expanding selection
+                    <div className="w-full flex flex-col gap-2">
+                      <button 
+                        onClick={() => setShowWhatsappOptions(!showWhatsappOptions)}
+                        className="w-full group relative px-6 py-4 rounded-xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(16,185,129,0.25)] hover:shadow-[0_15px_30px_rgba(16,185,129,0.4)] overflow-hidden flex items-center justify-center gap-3 border border-emerald-500/40 cursor-pointer"
+                      >
+                        <div className="absolute inset-0 bg-emerald-600 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+                        <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
+                          <MessageCircle className="h-5 w-5 text-white" /> 
+                          Choose WhatsApp Chat ({whatsappNumbersList.length})
+                        </div>
+                      </button>
+                      
+                      {showWhatsappOptions && (
+                        <div className="bg-slate-950/80 backdrop-blur-md border border-emerald-500/30 rounded-xl p-2.5 space-y-2 animate-fade-in shadow-inner max-h-[220px] overflow-y-auto custom-scrollbar">
+                          <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-2 mb-1">Select a WhatsApp Number:</p>
+                          {whatsappNumbersList.map((whatsapp, idx) => (
+                            <a 
+                              key={idx}
+                              href={`https://wa.me/${whatsapp.rawNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full bg-slate-900/60 hover:bg-slate-800 border border-slate-800/80 hover:border-emerald-500/40 rounded-lg p-3 text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center justify-between group/item"
+                            >
+                              <span className="truncate max-w-[180px]">{whatsapp.displayText}</span>
+                              <span className="text-[10px] uppercase font-black px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded group-hover/item:bg-emerald-500 group-hover/item:text-slate-950 transition-all flex items-center gap-1">
+                                <MessageCircle className="h-3 w-3" /> Chat
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
                 )}
               </div>
             </div>
