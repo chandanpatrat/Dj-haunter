@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Speaker, Phone, MessageCircle, MonitorPlay, Camera, CheckCircle2, Flame, ShieldCheck, Heart, Share2, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, MapPin, Speaker, Phone, MessageCircle, MonitorPlay, Camera, CheckCircle2, Flame, ShieldCheck, Heart, Share2, Check, ChevronLeft, ChevronRight, Star, MessageSquare } from 'lucide-react';
 import { supabase } from '@/utils/supabase';
 
 export default function PublicDjProfileClient({ initialDjData, profileRetrievalErrorMessage: serverError, targetDjProfileId }) {
@@ -15,6 +15,93 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   const desktopScrollContainerRef = useRef(null);
   const mobileScrollContainerRef = useRef(null);
+
+  // Review System State
+  const [reviews, setReviews] = useState([]);
+  const [isFetchingReviews, setIsFetchingReviews] = useState(true);
+  const [averageRating, setAverageRating] = useState(0);
+  const [newReviewerName, setNewReviewerName] = useState('');
+  const [newRating, setNewRating] = useState(5);
+  const [hoveredStar, setHoveredStar] = useState(0);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
+
+  const fetchReviews = async () => {
+    if (!targetDjProfileId) return;
+    setIsFetchingReviews(true);
+    try {
+      const { data, error } = await supabase
+        .from('dj_reviews')
+        .select('*')
+        .eq('dj_id', targetDjProfileId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setReviews(data || []);
+      if (data && data.length > 0) {
+        const sum = data.reduce((acc, curr) => acc + curr.rating, 0);
+        setAverageRating((sum / data.length).toFixed(1));
+      } else {
+        setAverageRating(0);
+      }
+    } catch (err) {
+      console.error("Error fetching reviews:", err);
+    } finally {
+      setIsFetchingReviews(false);
+    }
+  };
+
+  useEffect(() => {
+    if (targetDjProfileId) {
+      fetchReviews();
+    }
+  }, [targetDjProfileId]);
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!newReviewerName.trim() || !newComment.trim()) return;
+
+    setIsSubmittingReview(true);
+    setReviewError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('dj_reviews')
+        .insert([
+          {
+            dj_id: targetDjProfileId,
+            reviewer_name: newReviewerName,
+            rating: newRating,
+            comment: newComment,
+          }
+        ])
+        .select();
+
+      if (error) throw error;
+
+      setReviewSubmitSuccess(true);
+      setNewReviewerName('');
+      setNewComment('');
+      setNewRating(5);
+      setHoveredStar(0);
+      
+      if (data && data[0]) {
+        const updatedReviews = [data[0], ...reviews];
+        setReviews(updatedReviews);
+        const sum = updatedReviews.reduce((acc, curr) => acc + curr.rating, 0);
+        setAverageRating((sum / updatedReviews.length).toFixed(1));
+      }
+      
+      setTimeout(() => setReviewSubmitSuccess(false), 4000);
+    } catch (err) {
+      console.error("Error submitting review:", err);
+      setReviewError(err.message || "Failed to submit review. Make sure you ran the SQL command to create the dj_reviews table!");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   const scrollVideos = (direction, isMobile = false) => {
     const container = isMobile ? mobileScrollContainerRef.current : desktopScrollContainerRef.current;
@@ -230,6 +317,15 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               <span className="flex items-center gap-1.5 text-cyan-200/80">
                 <MapPin className="h-4 w-4 text-cyan-500" /> {activeDjProfileData.city}, {activeDjProfileData.district}
               </span>
+              {reviews.length > 0 ? (
+                <span className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 px-3 py-1 rounded-md border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.15)] animate-fade-in">
+                  <Star className="h-4 w-4 fill-amber-500 text-amber-400" /> {averageRating} ★ ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-slate-400 bg-slate-800/40 px-3 py-1 rounded-md border border-slate-700/30">
+                  <Star className="h-4 w-4" /> No reviews yet
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -342,6 +438,199 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
                   {activeDjProfileData.specs || "No specific hardware details provided."}
                 </p>
               </div>
+            </div>
+
+            {/* Dynamic Review & Rating System */}
+            <div className="bg-slate-900/50 backdrop-blur-2xl border border-amber-500/30 border-t-amber-400/40 rounded-3xl p-8 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.6)] relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none"></div>
+              
+              <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
+                <div className="p-2.5 bg-amber-500/15 rounded-xl border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                  <MessageSquare className="h-5 w-5 text-amber-400" />
+                </div>
+                User Reviews & Feedbacks
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-8 relative z-10">
+                {/* Ratings Statistics Sidecard */}
+                <div className="md:col-span-2 flex flex-col justify-center items-center bg-slate-950/60 border border-slate-800 rounded-2xl p-6 text-center shadow-inner">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">AVERAGE RATING</p>
+                  <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-300 to-yellow-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    {reviews.length > 0 ? averageRating : '0.0'}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-3 mb-2">
+                    {[1, 2, 3, 4, 5].map((starIdx) => {
+                      const activeStarsCount = Math.round(Number(averageRating));
+                      return (
+                        <Star 
+                          key={starIdx} 
+                          className={`h-5 w-5 ${
+                            starIdx <= activeStarsCount 
+                              ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]' 
+                              : 'text-slate-750'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-slate-400 font-bold mt-1">
+                    Based on {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+                  </p>
+                </div>
+
+                {/* Submit New Review Form */}
+                <div className="md:col-span-3 bg-slate-950/40 border border-slate-800/80 rounded-2xl p-6 shadow-md">
+                  <h3 className="text-sm font-black text-white mb-4 uppercase tracking-widest border-b border-slate-800/80 pb-2">Share Your Experience</h3>
+                  
+                  <form onSubmit={handleSubmitReview} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Your Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={newReviewerName}
+                          onChange={(e) => setNewReviewerName(e.target.value)}
+                          placeholder="e.g. Rahul Sharma"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 transition-colors"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Your Rating</label>
+                        <div className="flex items-center gap-2 h-[38px]">
+                          {[1, 2, 3, 4, 5].map((starIdx) => (
+                            <button
+                              key={starIdx}
+                              type="button"
+                              onClick={() => setNewRating(starIdx)}
+                              onMouseEnter={() => setHoveredStar(starIdx)}
+                              onMouseLeave={() => setHoveredStar(0)}
+                              className="focus:outline-none transition-transform active:scale-90 cursor-pointer"
+                            >
+                              <Star 
+                                className={`h-6 w-6 transition-all ${
+                                  starIdx <= (hoveredStar || newRating)
+                                    ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] scale-110'
+                                    : 'text-slate-700 hover:text-slate-500 scale-100'
+                                }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Review Comment</label>
+                      <textarea
+                        required
+                        rows="2"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Tell us about their sound output, base check, lighting setup..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 transition-colors resize-none"
+                      ></textarea>
+                    </div>
+
+                    {reviewError && (
+                      <p className="text-red-400 text-xs font-semibold">{reviewError}</p>
+                    )}
+
+                    {reviewSubmitSuccess && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs p-3 rounded-lg flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4" /> Review submitted successfully!
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSubmittingReview}
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-slate-950 font-black text-xs py-3 rounded-xl transition-all cursor-pointer shadow-[0_4px_15px_rgba(217,119,6,0.3)] hover:shadow-[0_4px_25px_rgba(217,119,6,0.5)] flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingReview ? 'Submitting...' : 'Post Review'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Scrollable Reviews Feed List */}
+              <div className="mt-8 relative z-10 border-t border-slate-800/80 pt-6">
+                <h3 className="text-sm font-black text-white mb-4 uppercase tracking-widest">Client Feedbacks</h3>
+                
+                {isFetchingReviews ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <div className="h-8 w-8 border-2 border-slate-800 border-t-amber-500 rounded-full animate-spin mb-3"></div>
+                    <p className="text-slate-500 text-xs font-bold tracking-widest uppercase">Fetching Reviews...</p>
+                  </div>
+                ) : reviews.length === 0 ? (
+                  <div className="bg-slate-950/40 border border-slate-800/50 rounded-2xl p-8 text-center text-slate-500">
+                    <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-30 text-slate-400" />
+                    <p className="text-xs font-black uppercase tracking-wider mb-1">No reviews yet</p>
+                    <p className="text-xs text-slate-600">Be the first to share your experience with this DJ setup!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar select-none">
+                    {reviews.map((review) => (
+                      <div 
+                        key={review.id} 
+                        className="bg-slate-950/60 hover:bg-slate-950 border border-slate-800/80 hover:border-slate-700/60 p-5 rounded-2xl transition-all shadow-inner group/item"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-amber-500/20 to-yellow-600/20 border border-amber-500/30 flex items-center justify-center font-black text-amber-400 text-xs uppercase shadow-inner">
+                              {review.reviewer_name.charAt(0)}
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-slate-200">{review.reviewer_name}</h4>
+                              <p className="text-[10px] text-slate-500 font-medium">
+                                {review.created_at ? new Date(review.created_at).toLocaleDateString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric'
+                                }) : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((starVal) => (
+                              <Star 
+                                key={starVal} 
+                                className={`h-3.5 w-3.5 ${
+                                  starVal <= review.rating 
+                                    ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_3px_rgba(245,158,11,0.5)]' 
+                                    : 'text-slate-850'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium pl-0 sm:pl-11 pr-2">
+                          {review.comment}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Portable Custom Scrollbar Styling */}
+              <style dangerouslySetInnerHTML={{__html: `
+                .custom-scrollbar::-webkit-scrollbar {
+                  width: 6px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                  background: rgba(2, 6, 23, 0.4);
+                  border-radius: 9999px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background: rgba(245, 158, 11, 0.2);
+                  border-radius: 9999px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background: rgba(245, 158, 11, 0.4);
+                }
+              `}} />
             </div>
 
             {/* Desktop Live Performance Carousel Section (Desktop only) */}

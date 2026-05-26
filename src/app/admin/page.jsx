@@ -1,15 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Database, MapPin, Users, Settings, ShieldCheck, Home, Zap, Speaker, Trash2, Edit, Flame, CheckCircle2 } from 'lucide-react';
+import { Plus, Database, MapPin, Users, Settings, ShieldCheck, Home, Zap, Speaker, Trash2, Edit, Flame, CheckCircle2, LogOut } from 'lucide-react';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminDashboard() {
   const [djs, setDjs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({ totalDjs: 0, uniqueCities: 0 });
   const [actionMessage, setActionMessage] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+      window.location.href = '/admin/login';
+    } catch (error) {
+      console.error("Error signing out:", error);
+      window.location.href = '/admin/login';
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -132,13 +144,24 @@ export default function AdminDashboard() {
             </div>
           </div>
           
-          <Link href="/admin/add-dj" className="z-10 group relative px-8 py-4 rounded-2xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_30px_rgba(6,182,212,0.6)] flex items-center gap-3 overflow-hidden border border-cyan-400/50">
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
-            <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
-            <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
-              <Zap className="h-5 w-5 text-white fill-white/50" /> Deploy New DJ
-            </div>
-          </Link>
+          <div className="flex flex-wrap items-center gap-4 z-10">
+            <Link href="/admin/add-dj" className="group relative px-8 py-4 rounded-2xl font-black text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_30px_rgba(6,182,212,0.6)] flex items-center gap-3 overflow-hidden border border-cyan-400/50">
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+              <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
+              <div className="relative z-10 flex items-center gap-2 drop-shadow-md">
+                <Zap className="h-5 w-5 text-white fill-white/50" /> Deploy New DJ
+              </div>
+            </Link>
+            
+            <button 
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="group relative px-8 py-4 rounded-2xl font-black text-rose-400 hover:text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_30px_rgba(244,63,94,0.15)] flex items-center gap-3 overflow-hidden border border-rose-500/30 hover:border-rose-400/50 bg-rose-500/10 hover:bg-rose-500/20 cursor-pointer disabled:opacity-50"
+            >
+              <LogOut className="h-5 w-5 group-hover:translate-x-0.5 transition-transform" />
+              <span>{isLoggingOut ? 'Logging Out...' : 'Log Out'}</span>
+            </button>
+          </div>
         </div>
 
         {/* LIVE Database Stats */}
