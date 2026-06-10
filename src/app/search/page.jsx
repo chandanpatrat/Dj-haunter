@@ -310,7 +310,7 @@ function SearchResultsDataFetcher() {
                 
                 <div className="flex flex-col pt-5 border-t border-slate-800 mt-auto">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
+                    <span className="text-[10px] sm:text-xs font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
                       Price depends on distance
                     </span>
                     

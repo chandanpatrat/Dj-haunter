@@ -320,7 +320,7 @@ export default function HomePage() {
                   
                   <div className="flex flex-col pt-3 border-t border-slate-800/50 mt-auto">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs md:text-sm font-black text-cyan-400">Price depends on distance</span>
+                      <span className="text-[10px] sm:text-xs font-black text-cyan-400">Price depends on distance</span>
                       <span className="text-[10px] md:text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
                         View Profile <ArrowRight className="h-3 w-3" />
                       </span>
@@ -376,7 +376,7 @@ export default function HomePage() {
                   <p className="text-[10px] md:text-xs font-medium text-slate-400 mb-3 line-clamp-2 leading-relaxed">{djProfile.specs}</p>
                   <div className="flex flex-col pt-3 border-t border-slate-800/50 mt-auto">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs md:text-sm font-black text-cyan-400">Price depends on distance</span>
+                      <span className="text-[10px] sm:text-xs font-black text-cyan-400">Price depends on distance</span>
                       <span className="text-[10px] md:text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
                         View Profile <ArrowRight className="h-3 w-3" />
                       </span>
