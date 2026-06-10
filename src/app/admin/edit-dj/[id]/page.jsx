@@ -132,7 +132,7 @@ export default function EditDJ() {
       const updatedDjPayloadValues = {
         dj_name: interactiveFormData.get('dj_name'),
         specs: interactiveFormData.get('specs'),
-        price: interactiveFormData.get('price'),
+        price: 0,
         phone: interactiveFormData.get('phone'),
         whatsapp: interactiveFormData.get('whatsapp'),
         state: interactiveFormData.get('state'),
@@ -272,13 +272,6 @@ export default function EditDJ() {
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Hardware Specs</label>
               <textarea rows="2" name="specs" defaultValue={activeDjProfile.specs} className="w-full bg-slate-950/60 backdrop-blur-md border border-slate-700/50 focus:border-cyan-500 rounded-xl px-5 py-4 text-white placeholder-slate-500 outline-none transition-all focus:ring-4 focus:ring-cyan-500/10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] resize-none"></textarea>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Price per Event (₹)</label>
-              <div className="relative">
-                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
-                <input type="number" name="price" required defaultValue={activeDjProfile.price} className="w-full bg-slate-950/60 backdrop-blur-md border border-slate-700/50 focus:border-cyan-500 rounded-xl pl-10 pr-5 py-4 text-white outline-none transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]" />
-              </div>
             </div>
           </div>
         </div>

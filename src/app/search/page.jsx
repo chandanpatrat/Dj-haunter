@@ -267,26 +267,33 @@ function SearchResultsDataFetcher() {
               <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent pointer-events-none"></div>
               
               {/* Image Area */}
-              <div className="h-48 bg-slate-950 relative w-full overflow-hidden">
+              <div className="h-48 bg-slate-950 relative w-full overflow-hidden flex items-center justify-center">
                 {djProfileData.media_urls && djProfileData.media_urls.length > 0 && (
-                  <img 
-                    src={djProfileData.media_urls[0]} 
-                    alt={djProfileData.dj_name} 
-                    className="object-cover w-full h-full opacity-60 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" 
-                  />
+                  <>
+                    <img 
+                      src={djProfileData.media_urls[0]} 
+                      alt={djProfileData.dj_name} 
+                      className="absolute inset-0 w-full h-full object-cover opacity-30 blur-lg scale-110 pointer-events-none" 
+                    />
+                    <img 
+                      src={djProfileData.media_urls[0]} 
+                      alt={djProfileData.dj_name} 
+                      className="relative z-10 max-w-full max-h-full object-contain opacity-70 group-hover:opacity-100 group-hover:scale-102 transition-all duration-500" 
+                    />
+                  </>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-20"></div>
                 
-                <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 z-20 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 z-30 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Verified
                 </div>
                 
-                <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 text-slate-200 text-sm font-bold drop-shadow-md">
+                <div className="absolute bottom-4 left-4 z-30 flex items-center gap-1.5 text-slate-200 text-sm font-bold drop-shadow-md">
                   <MapPin className="h-4 w-4 text-cyan-400" /> {djProfileData.city}, {djProfileData.district}
                 </div>
                 
                 {djProfileData.distance !== undefined && djProfileData.distance < 9999 && (
-                  <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 bg-cyan-950/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl text-[10px] font-black text-cyan-300 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.4)] uppercase tracking-wider">
+                  <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 bg-cyan-950/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl text-[10px] font-black text-cyan-300 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.4)] uppercase tracking-wider">
                     {djProfileData.distance.toFixed(1)} km
                   </div>
                 )}
@@ -301,14 +308,16 @@ function SearchResultsDataFetcher() {
                   {djProfileData.specs}
                 </p>
                 
-                <div className="flex justify-between items-center pt-5 border-t border-slate-800 mt-auto">
-                  <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
-                    ₹{djProfileData.price}
-                  </span>
-                  
-                  <span className="text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
-                    View Profile <ArrowLeft className="h-4 w-4 rotate-180" />
-                  </span>
+                <div className="flex flex-col pt-5 border-t border-slate-800 mt-auto">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
+                      Price depends on distance
+                    </span>
+                    
+                    <span className="text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
+                      View Profile <ArrowLeft className="h-4 w-4 rotate-180" />
+                    </span>
+                  </div>
                 </div>
               </div>
             </Link>

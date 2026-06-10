@@ -203,7 +203,7 @@ export default function AdminDashboard() {
                 <tr>
                   <th className="px-6 py-5">DJ Name</th>
                   <th className="px-6 py-5">Location</th>
-                  <th className="px-6 py-5">Base Price</th>
+                  <th className="px-6 py-5">Price Info</th>
                   <th className="px-6 py-5 text-center">Visibility</th>
                   <th className="px-6 py-5 text-right">Actions</th>
                 </tr>
@@ -218,9 +218,12 @@ export default function AdminDashboard() {
                   djs.map((dj) => (
                     <tr key={dj.id} className="hover:bg-indigo-500/10 transition-colors group/row">
                       <td className="px-6 py-5 font-black text-white flex items-center gap-4">
-                        <div className="h-12 w-12 bg-slate-900 rounded-xl border border-indigo-500/30 flex items-center justify-center overflow-hidden shrink-0">
+                        <div className="h-12 w-12 bg-slate-900 rounded-xl border border-indigo-500/30 flex items-center justify-center overflow-hidden shrink-0 relative">
                           {dj.media_urls && dj.media_urls.length > 0 ? (
-                            <img src={dj.media_urls[0]} alt={dj.dj_name} className="w-full h-full object-cover" />
+                            <>
+                              <img src={dj.media_urls[0]} alt={dj.dj_name} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-xs scale-110 pointer-events-none" />
+                              <img src={dj.media_urls[0]} alt={dj.dj_name} className="relative z-10 max-w-full max-h-full object-contain" />
+                            </>
                           ) : (
                             <Speaker className="h-5 w-5 text-indigo-400" />
                           )}
@@ -228,7 +231,7 @@ export default function AdminDashboard() {
                         {dj.dj_name}
                       </td>
                       <td className="px-6 py-5 font-medium text-indigo-100/70">{dj.city}, {dj.state}</td>
-                      <td className="px-6 py-5 font-black text-indigo-300">₹ {dj.price}</td>
+                      <td className="px-6 py-5 font-black text-indigo-300 text-xs">Price depends on distance</td>
                       
                       {/* UPGRADED 2-STATE TRENDING BUTTON */}
                       <td className="px-6 py-5 text-center">

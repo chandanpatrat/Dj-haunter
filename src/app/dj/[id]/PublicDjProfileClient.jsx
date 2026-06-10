@@ -435,11 +435,18 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               {/* Main Stage Image */}
               <div className="relative aspect-video rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-800 shadow-inner">
                 {activeDjProfileData.media_urls && activeDjProfileData.media_urls.length > 0 ? (
-                  <img 
-                    src={activeDjProfileData.media_urls[activeGalleryImageIndex]} 
-                    alt={`${activeDjProfileData.dj_name} live setup view`} 
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <img 
+                      src={activeDjProfileData.media_urls[activeGalleryImageIndex]} 
+                      alt={`${activeDjProfileData.dj_name} live setup view blur backdrop`} 
+                      className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
+                    />
+                    <img 
+                      src={activeDjProfileData.media_urls[activeGalleryImageIndex]} 
+                      alt={`${activeDjProfileData.dj_name} live setup view`} 
+                      className="relative z-10 max-w-full max-h-full object-contain"
+                    />
+                  </>
                 ) : (
                   <div className="text-slate-600 flex flex-col items-center">
                     <Speaker className="h-20 w-20 mb-4 opacity-50" />
@@ -455,13 +462,14 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
                     <button 
                       key={assetIndex}
                       onClick={() => setActiveGalleryImageIndex(assetIndex)}
-                      className={`relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden transition-all duration-300 border-2 ${
+                      className={`relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden transition-all duration-300 border-2 flex items-center justify-center bg-slate-950 ${
                         activeGalleryImageIndex === assetIndex 
                           ? 'border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-105' 
                           : 'border-slate-700/50 hover:border-slate-500 opacity-60 hover:opacity-100'
                       }`}
                     >
-                      <img src={mediaAssetUrl} alt={`Setup thumbnail ${assetIndex}`} className="w-full h-full object-cover" />
+                      <img src={mediaAssetUrl} alt={`Setup thumbnail ${assetIndex} blur backdrop`} className="absolute inset-0 w-full h-full object-cover blur-sm opacity-30 pointer-events-none" />
+                      <img src={mediaAssetUrl} alt={`Setup thumbnail ${assetIndex}`} className="relative z-10 max-w-full max-h-full object-contain" />
                     </button>
                   ))}
                 </div>
@@ -640,16 +648,22 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               <h2 className="text-2xl font-black text-white mb-2 relative z-10">Book this Setup</h2>
               <p className="text-slate-400 text-sm mb-6 relative z-10">Contact the owner directly to negotiate dates, transport, and final pricing.</p>
               
-              {/* Integrated Base Booking Price Display */}
-              <div className="mb-6 relative z-10 bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)]">
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Base Booking Price</p>
-                  <p className="text-xs text-slate-500 font-bold mt-0.5">Negotiable Rate</p>
+              {/* Integrated Booking Price Display */}
+              <div className="mb-6 relative z-10 bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2.5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)]">
+                <div className="flex items-center justify-between w-full">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Booking Price</p>
+                    <p className="text-xs text-slate-500 font-bold mt-0.5">Negotiable Rate</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.25)]">
+                      Price depends on distance
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.25)]">
-                    ₹ {activeDjProfileData.price}
-                  </p>
+                <div className="border-t border-slate-800/80 pt-2 text-[10px] text-slate-400 leading-normal flex items-start gap-1.5 font-medium">
+                  <span className="text-cyan-400 font-black text-xs leading-none">*</span>
+                  <span>Actual price is variable and depends upon season and travel distance to your location.</span>
                 </div>
               </div>
               

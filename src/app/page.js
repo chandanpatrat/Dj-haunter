@@ -301,12 +301,15 @@ export default function HomePage() {
               >
                 <div className="h-40 md:h-48 relative w-full flex items-center justify-center overflow-hidden bg-slate-950">
                   {djProfile.media_urls && djProfile.media_urls.length > 0 ? (
-                    <img src={djProfile.media_urls[0]} alt={djProfile.dj_name} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
+                    <>
+                      <img src={djProfile.media_urls[0]} alt={djProfile.dj_name} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-lg scale-110 pointer-events-none" />
+                      <img src={djProfile.media_urls[0]} alt={djProfile.dj_name} className="relative z-10 max-w-full max-h-full object-contain opacity-80 group-hover:opacity-100 group-hover:scale-102 transition-all duration-500" />
+                    </>
                   ) : (
                     <Speaker className="h-8 w-8 text-slate-800" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10"></div>
-                  <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1.5 text-slate-200 text-[10px] md:text-xs font-bold bg-slate-900/80 px-2.5 py-1 rounded border border-slate-700/50">
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-20"></div>
+                  <div className="absolute bottom-2 left-2 z-30 flex items-center gap-1.5 text-slate-200 text-[10px] md:text-xs font-bold bg-slate-900/80 px-2.5 py-1 rounded border border-slate-700/50">
                     <MapPin className="h-3 w-3 text-cyan-400" /> {djProfile.city}
                   </div>
                 </div>
@@ -315,11 +318,13 @@ export default function HomePage() {
                   <h3 className="text-base md:text-lg font-black text-white group-hover:text-cyan-400 transition-colors mb-1 truncate">{djProfile.dj_name}</h3>
                   <p className="text-[10px] md:text-xs font-medium text-slate-400 mb-3 line-clamp-2 leading-relaxed">{djProfile.specs}</p>
                   
-                  <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-auto">
-                    <span className="text-sm md:text-base font-black text-white">₹ {djProfile.price}</span>
-                    <span className="text-[10px] md:text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
-                      View Profile <ArrowRight className="h-3 w-3" />
-                    </span>
+                  <div className="flex flex-col pt-3 border-t border-slate-800/50 mt-auto">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs md:text-sm font-black text-cyan-400">Price depends on distance</span>
+                      <span className="text-[10px] md:text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
+                        View Profile <ArrowRight className="h-3 w-3" />
+                      </span>
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -354,23 +359,28 @@ export default function HomePage() {
               >
                 <div className="h-40 md:h-48 relative w-full flex items-center justify-center overflow-hidden bg-slate-950">
                   {djProfile.media_urls && djProfile.media_urls.length > 0 ? (
-                    <img src={djProfile.media_urls[0]} alt={djProfile.dj_name} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
+                    <>
+                      <img src={djProfile.media_urls[0]} alt={djProfile.dj_name} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-lg scale-110 pointer-events-none" />
+                      <img src={djProfile.media_urls[0]} alt={djProfile.dj_name} className="relative z-10 max-w-full max-h-full object-contain opacity-80 group-hover:opacity-100 group-hover:scale-102 transition-all duration-500" />
+                    </>
                   ) : (
                     <Speaker className="h-8 w-8 text-slate-800" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10"></div>
-                  <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1.5 text-slate-200 text-[10px] md:text-xs font-bold bg-slate-900/80 px-2.5 py-1 rounded border border-slate-700/50">
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-20"></div>
+                  <div className="absolute bottom-2 left-2 z-30 flex items-center gap-1.5 text-slate-200 text-[10px] md:text-xs font-bold bg-slate-900/80 px-2.5 py-1 rounded border border-slate-700/50">
                     <MapPin className="h-3 w-3 text-cyan-400" /> {djProfile.city}
                   </div>
                 </div>
                 <div className="p-4 md:p-5 flex flex-col flex-grow">
                   <h3 className="text-base md:text-lg font-black text-white group-hover:text-cyan-400 transition-colors mb-1 truncate">{djProfile.dj_name}</h3>
                   <p className="text-[10px] md:text-xs font-medium text-slate-400 mb-3 line-clamp-2 leading-relaxed">{djProfile.specs}</p>
-                  <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-auto">
-                    <span className="text-sm md:text-base font-black text-white">₹ {djProfile.price}</span>
-                    <span className="text-[10px] md:text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
-                      View Profile <ArrowRight className="h-3 w-3" />
-                    </span>
+                  <div className="flex flex-col pt-3 border-t border-slate-800/50 mt-auto">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs md:text-sm font-black text-cyan-400">Price depends on distance</span>
+                      <span className="text-[10px] md:text-xs font-bold text-slate-500 group-hover:text-cyan-400 flex items-center gap-1 transition-colors">
+                        View Profile <ArrowRight className="h-3 w-3" />
+                      </span>
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -434,9 +444,12 @@ export default function HomePage() {
                     <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
 
                     {/* Image */}
-                    <div className="h-16 w-16 rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex-shrink-0 relative">
+                    <div className="h-16 w-16 rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex-shrink-0 relative flex items-center justify-center">
                       {dj.media_urls && dj.media_urls.length > 0 ? (
-                        <img src={dj.media_urls[0]} alt={dj.dj_name} className="w-full h-full object-cover" />
+                        <>
+                          <img src={dj.media_urls[0]} alt={dj.dj_name} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm scale-110 pointer-events-none" />
+                          <img src={dj.media_urls[0]} alt={dj.dj_name} className="relative z-10 max-w-full max-h-full object-contain" />
+                        </>
                       ) : (
                         <Speaker className="h-5 w-5 text-slate-700 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                       )}
@@ -448,7 +461,7 @@ export default function HomePage() {
                       <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mb-1.5">
                         <MapPin className="h-3 w-3 text-cyan-500" /> {dj.city}, {dj.state}
                       </p>
-                      <p className="text-xs font-black text-rose-300">₹ {dj.price}</p>
+                      <p className="text-[10px] font-black text-rose-300">Price depends on distance</p>
                     </div>
 
                     {/* Remove button */}
