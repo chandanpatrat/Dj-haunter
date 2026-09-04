@@ -13,19 +13,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase Database Endpoint
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          echo "Sending keep-alive request to Supabase REST API..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/dj_directory?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
-          
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Error: SUPABASE_URL or SUPABASE_ANON_KEY secret is missing or empty."
+            exit 1
+          fi
+
+          # Normalize URL: strip whitespace, trailing slashes, and redundant /rest/v1
+          CLEAN_URL=$(echo "$SUPABASE_URL" | tr -d '[:space:]' | sed 's|/rest/v1/*$||' | sed 's|/*$||')
+          ENDPOINT="${CLEAN_URL}/rest/v1/dj_directory?select=id&limit=1"
+
+          echo "Pinging endpoint: ${CLEAN_URL}/rest/v1/dj_directory..."
+
+          HTTP_STATUS=$(curl -s -S -o response.json -w "%{http_code}" \
+            -X GET "$ENDPOINT" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+
           echo "Response HTTP Status: $HTTP_STATUS"
-          
+          echo "Response Body:"
+          cat response.json || true
+          echo ""
+
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
             echo "Successfully pinged Supabase project. Database is active and awake!"
           else
-            echo "Warning: Unexpected response status: $HTTP_STATUS"
-            # Return failure if unreachable or authentication failed
+            echo "Error: Keep-alive request failed with HTTP status $HTTP_STATUS"
             exit 1
           fi
