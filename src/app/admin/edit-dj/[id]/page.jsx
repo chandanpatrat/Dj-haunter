@@ -139,6 +139,7 @@ export default function EditDJ() {
         district: interactiveFormData.get('district'),
         city: interactiveFormData.get('city'),
         pincode: interactiveFormData.get('pincode'),
+        google_maps_url: interactiveFormData.get('google_maps_url') || '',
         youtube_url: interactiveFormData.get('youtube_url'),
         instagram_url: interactiveFormData.get('instagram_url'),
         media_urls: finalizedMediaCollectionUrls,
@@ -322,6 +323,10 @@ export default function EditDJ() {
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Pincode</label>
               <input type="text" name="pincode" required defaultValue={activeDjProfile.pincode} className="w-full bg-slate-950/60 border border-slate-700/50 focus:border-blue-500 rounded-xl px-5 py-4 text-white outline-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]" />
+            </div>
+            <div className="md:col-span-2 lg:col-span-4">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Google Maps Location URL (Optional)</label>
+              <input type="url" name="google_maps_url" defaultValue={activeDjProfile.google_maps_url || ''} placeholder="https://maps.app.goo.gl/... or https://google.com/maps/..." className="w-full bg-slate-950/60 border border-slate-700/50 focus:border-blue-500 rounded-xl px-5 py-4 text-white placeholder-slate-500 outline-none transition-all focus:ring-4 focus:ring-blue-500/10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]" />
             </div>
           </div>
         </div>

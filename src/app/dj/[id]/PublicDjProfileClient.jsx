@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Speaker, Phone, MessageCircle, MonitorPlay, Camera, CheckCircle2, Flame, ShieldCheck, Heart, Share2, Check, ChevronLeft, ChevronRight, Star, MessageSquare } from 'lucide-react';
+import { ArrowLeft, MapPin, Speaker, Phone, MessageCircle, MonitorPlay, Camera, CheckCircle2, Flame, ShieldCheck, Heart, Share2, Check, ChevronLeft, ChevronRight, Star, MessageSquare, ExternalLink } from 'lucide-react';
 import { supabase } from '@/utils/supabase';
 
 export default function PublicDjProfileClient({ initialDjData, profileRetrievalErrorMessage: serverError, targetDjProfileId }) {
@@ -785,7 +785,7 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
               <div className="relative z-10 bg-slate-950/80 border border-slate-800 rounded-2xl p-5 shadow-inner">
                 <div className="flex items-start gap-3">
                   <MapPin className="h-5 w-5 text-cyan-400 mt-1 flex-shrink-0" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-white font-black text-sm tracking-tight leading-relaxed">
                       {activeDjProfileData.city}, {activeDjProfileData.district}
                     </p>
@@ -797,6 +797,22 @@ export default function PublicDjProfileClient({ initialDjData, profileRetrievalE
                     </div>
                   </div>
                 </div>
+
+                {/* Conditional Google Maps Button */}
+                {activeDjProfileData.google_maps_url && (
+                  <div className="mt-4 pt-4 border-t border-slate-800/80">
+                    <a
+                      href={activeDjProfileData.google_maps_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600/30 to-cyan-600/30 hover:from-blue-600/50 hover:to-cyan-600/50 border border-blue-500/40 hover:border-cyan-400 text-cyan-300 hover:text-white font-bold text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:shadow-[0_0_20px_rgba(6,182,212,0.35)] group/map cursor-pointer"
+                    >
+                      <MapPin className="h-4 w-4 text-cyan-400 group-hover/map:scale-110 transition-transform" />
+                      <span>View on Google Maps</span>
+                      <ExternalLink className="h-3.5 w-3.5 text-cyan-400/70 group-hover/map:translate-x-0.5 group-hover/map:-translate-y-0.5 transition-transform" />
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
 
